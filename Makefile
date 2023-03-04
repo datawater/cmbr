@@ -4,7 +4,7 @@ main: clean build-libs
 	DFLAGS='-wi -w -lowmem' dub build -v
 
 release: clean build-libs
-	DFLAGS='-wi -w -O -boundscheck=off -release --disable-d-passes' dub build -v
+	DFLAGS='-wi -w -O -boundscheck=off -release' dub build -v
 
 build-libs:
 	$(CC) -Wall -Wextra -Werror -std=c99 -O3 -fPIC -c $(BUILD_SRC)
