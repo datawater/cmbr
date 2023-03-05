@@ -13,15 +13,15 @@ ifeq ($(DC),gdc)
 endif
 
 main: clean build-libs
-	DFLAGS=$(DFLAGS) dub build -v
+	DFLAGS=$(DFLAGS) dub build -v --force
 	@-rm *.s
 
 release: clean build-libs
-	DFLAGS=$(DFLAGS_REL) dub build -v
+	DFLAGS=$(DFLAGS_REL) dub build -v --force
 	@-rm *.s
 
 build-libs:
-	$(CC) -Wall -Wextra -Werror -std=c99 -O3 -fPIC -c $(BUILD_SRC)
+	$(CC) -Wall -Wextra -Werror -std=c99 -O0 -ggdb -fPIC -c $(BUILD_SRC)
 
 clean:
 	@-rm *.o

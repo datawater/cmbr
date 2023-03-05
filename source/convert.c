@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <stdio.h>
 
 uint16_t string_to_cmbr(char *string) {
     register uint8_t piece = 0;
@@ -48,13 +49,14 @@ uint16_t string_to_cmbr(char *string) {
     }
     
     to_square = (uint8_t) ((string[len-1]-'0'-1) << 3) | ((uint8_t) string[len-2]-'A'-1);
-    
+    string[len-1] = '\0'; string[len-2] = '\0';
+     
     if (string[0] != '\0') {
         from_square_needs_using = true;
         if (isalpha(string[0])) from_square = string[0] - 'A' - 1;
         else {from_square = string[0] - '0' - 1; column_or_file = true;}
     }
-    
+
     register uint16_t final_cmbr = turn_into;
     
     if (!from_square_needs_using) {final_cmbr <<= 5;}

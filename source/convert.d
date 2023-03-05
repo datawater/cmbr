@@ -20,29 +20,27 @@ uint16_t string_to_cmbr(char* string);
  * value - An array of chars that stores the value.                         Value here would store `Bar`
  */
 struct metadata_text {
-    align:
-        char[16] key;
-        char[32] value;
+    char[16] key;
+    char[64] value;
 }
 
 /** 
  * Flags that a cmbr can have
  */
-enum cmbr_flag {
-    no_flag,
-    starts_variation,
-    starts_variation_with_black,
-    ends_variation
+enum cmbr_flag : ubyte {
+    no_flag = 0,
+    starts_variation = 1,
+    starts_variation_with_black = 2,
+    ends_variation = 3,
 }
 
 /**
  * A CMBR representation struct
  */
 struct cmbr_move {
-    align:
-        uint16_t move;
-        int flags;
-    this(uint16_t move, int flags) {
+    uint16_t move;
+    ubyte flags;
+    this(uint16_t move, ubyte flags) {
         this.move = move; this.flags = flags;
     }
 }
@@ -62,8 +60,10 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
         utils.exit(1);
     }
 
+    output_file.write("cmbr\4"); // CMBR file magic number. http://en.wikipedia.org/wiki/Magic_number_(programming) 
+
     ulong line_number             = 0;
-    metadata_text[16] metadata    = {0};  uint8_t metadata_i = 0;
+    metadata_text[16] metadata    = {0, 0};  uint8_t metadata_i = 0;
     string[32] game;                      uint8_t game_i     = 0;
     cmbr_move[256] moves;
 
@@ -82,7 +82,7 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
                 console.info("Reading line number: %lu. File: %s\n", line_number, toStringz(input_files[file_i]));
            
             string line = input_file.readln(); //line = \;
-            if (line.length < 3) continue;
+            if (line.length < 3) {metadata_i = 0; continue;}
 
             line = strip(line);
 
@@ -96,9 +96,19 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
             string last_three = line[$-3 .. $];
 
             if (last_three == "1/2" || last_three == "1-0" || last_three == "0-1") {
-                game_to_moves(game.ptr, game_i, moves.ptr);
+                ubyte moves_i = game_to_moves(game.ptr, game_i, moves.ptr);
+                write_as_cmbr(moves.ptr, metadata.ptr, output_file, moves_i, metadata_i);
+                
+                game_i = 0; metadata_i = 0;
+                for (int i = 0; i < metadata_i; i++) {
+                    utils.memset(cast(char*)&(metadata[i].key),   '\0', 16);
+                    utils.memset(cast(char*)&(metadata[i].value), '\0', 64);
+                }
             }
         }
+
+        console.printc(FGREEN, toStringz("[SUCCESS]"));
+        writefln(" Converted file: `%s` to .cmbr format.", input_files[file_i]);
     }
 }
 
@@ -124,9 +134,9 @@ void carve_metadata(string line_, metadata_text* metadata) {
     length -= 2;       // Removes the ending `"]` ==> Foo "Bar
 
     // Extract the key
-    for (int i = 0; line[0] != '\0' && line[0] != ' '; i++) // ==> "Bar
+    for (int i = 0; line[0] != ' '; i++) // ==> "Bar
         metadata.key[i] = line++[0 & length--]; // `0 & length--` is just a trick to decrement the length in one line, since `0 & x` is 0
-    
+
     line += 2; length -= 2; // Remove the ` "`. ==> Bar
     // Now, all that's left in line is the value. So we can copy it into the metadata.value
     for (int i = 0; i < length; i++)
@@ -140,7 +150,7 @@ void carve_metadata(string line_, metadata_text* metadata) {
  *  moves    -- A pointer to the cmbr array where the result needs to be stored
  *  game_len -- The size of the "game" array
  */
-void game_to_moves(string* game, ubyte game_i, cmbr_move* moves) {
+ubyte game_to_moves(string* game, ubyte game_i, cmbr_move* moves) {
     // TODO: Implement variation support.
 
     ubyte moves_i = 0;
@@ -170,9 +180,7 @@ void game_to_moves(string* game, ubyte game_i, cmbr_move* moves) {
              */
             if (game[i][string_i] == ' ') {
                 uint16_t cmbr = string_to_cmbr(cast(char*)toStringz(buffer));
-                moves[moves_i] = cmbr_move(cmbr, cmbr_flag.no_flag);
-
-                writef("Move: %d\n", cmbr);
+                moves[moves_i++] = cmbr_move(cmbr, cmbr_flag.no_flag);
 
                 utils.memset(cast(char*)&buffer, '\0', buffer_i); 
                 buffer_i = 0;
@@ -186,5 +194,42 @@ void game_to_moves(string* game, ubyte game_i, cmbr_move* moves) {
 
             buffer[buffer_i++] = game[i][string_i];
         }
+    }
+
+    return moves_i;
+}
+
+/** A Funciton that writes an array of cmbrs and metadata into the inputed file
+ *
+ *
+ * moves        - The array of cmbrs to write
+ * metadata     - The metadata to write
+ * output       - A file pointer to the file.
+ * moves_len    - The length of the array of moves
+ * metadata_len - The length of the array of metadata
+ */
+
+void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte moves_len, ubyte metadata_len) {
+    FILE* output_handle = output.getFP();
+
+    fputc('\1', output_handle); // Metadata start
+    fputc(metadata_len, output_handle); // Amount of metadata lines
+
+    for (ubyte i = 0; i < metadata_len; i++) {
+        ubyte key_length = cast(ubyte)strlen(toStringz(metadata[i].key));
+        ubyte val_length = cast(ubyte)strlen(toStringz(metadata[i].value));
+
+        fputc(key_length, output_handle);
+        fwrite(cast(void*)toStringz(metadata[i].key), 1, key_length, output_handle);
+        fputc(val_length, output_handle);
+        fwrite(cast(void*)toStringz(metadata[i].value), 1, val_length, output_handle);
+    }
+
+    fputc('\4', output_handle); // Start of game
+    fwrite(cast(void*)&moves_len, cast(ulong)(ubyte.sizeof), 1, output_handle); // Amount of moves
+
+    for (ubyte i = 0; i < moves_len; i++) {
+        cmbr_move to_write = moves[i];
+        fprintf(output_handle, "%c%c%c", to_write.flags, to_write.move >> 8, to_write.move & ((1 << 8)-1));
     }
 }
