@@ -21,7 +21,7 @@ release: clean build-libs
 	@-rm *.s
 
 build-libs:
-	$(CC) -Wall -Wextra -Werror -std=c99 -O0 -ggdb -fPIC -c $(BUILD_SRC)
+	$(CC) -Wall -Wextra -Werror -std=c99 -O3 -fPIC -c $(BUILD_SRC)
 
 clean:
 	@-rm *.o
