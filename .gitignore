@@ -18,3 +18,4 @@ cmbr-test-*
 .vscode/
 *.cmbr
 test/bigboy-*
+*.s
