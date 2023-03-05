@@ -4,7 +4,7 @@
 	],
 	"copyright": "Copyright © 2023, datawater",
 	"description": "Chess move binary representation",
-	"license": "GPL-3",
+	"license": "AGPL-3",
 	"name": "cmbr",
 	"lflags": ["console.o", "convert.o"]
 }
