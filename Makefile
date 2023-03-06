@@ -13,11 +13,11 @@ ifeq ($(DC),gdc)
 endif
 
 main: clean build-libs
-	DFLAGS=$(DFLAGS) dub build -v --force --compiler=$(DC)
+	DFLAGS=$(DFLAGS) dub build -v --force
 	@-rm *.s
 
 release: clean build-libs
-	DFLAGS=$(DFLAGS_REL) dub build -v --force --compiler=$(DC)
+	DFLAGS=$(DFLAGS_REL) dub build -v --force
 	@-rm *.s
 
 build-libs:

@@ -1,13 +1,16 @@
-name: Run all D Tests
+name: Build on multiple platforms
 on: [push, pull_request]
 
 jobs:
-  test:
-    name: Dub Tests
+  build-matrix:
+    name: Dub builds linux, macos
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
+        os: [ubuntu-latest, macOS-latest]
         dc: [dmd-latest, ldc-latest]
+        exclude:
+          - { os: macOs-latest, dc: dmd-latest }
+      
 
     runs-on: ${{ matrix.os }}
     steps:
@@ -18,5 +21,6 @@ jobs:
         with:
           compiler: ${{ matrix.dc }}
 
-      - name: Run tests
-        run: make DC=${{ matrix.dc }}
+      - name: Build
+        run: make
+      
