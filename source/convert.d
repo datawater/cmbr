@@ -86,14 +86,13 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
 
         while (!input_file.eof()) {
             line_number++;
-            // TODO: A proper progress bar, using threads and fseek.
+            // TODO: A proper progress bar, using threads and fseek.s
             if (line_number % 1000 == 0 || line_number == 1)
                 console.info("Reading line number: %lu. File: %s\n", line_number, toStringz(input_files[file_i]));
            
             string line = input_file.readln(); //line = \;
-            if (line.length < 3) {metadata_i = 0; continue;}
-
             line = strip(line);
+            if (line.length < 3) {continue;}
 
             /// If the first char of the line is a `[`. it means that the line if for metadata.
             if (line[0] == '[') {
@@ -104,7 +103,7 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
 
             string last_three = line[$-3 .. $];
 
-            if (last_three == "1/2" || last_three == "1-0" || last_three == "0-1") {
+            if (last_three == "1/2" || last_three == "1-0" || last_three == "0-1" || last_three == "  *") {
                 ubyte moves_i = game_to_moves(game.ptr, game_i, moves.ptr);
                 write_as_cmbr(moves.ptr, metadata.ptr, output_file, moves_i, metadata_i);
                 
@@ -144,7 +143,7 @@ void carve_metadata(string line_, metadata_text* metadata) {
 
     // Extract the key
     for (int i = 0; line[0] != ' '; i++) // ==> "Bar
-        metadata.key[i] = line++[0 & length--]; // `0 & length--` is just a trick to decrement the length in one line, since `0 & x` is 0
+        metadata.key[i] = line++[0 & length--]; // `0 & length--` is just a trick to decrement the length in one line, since `0 & x` is 0s
 
     line += 2; length -= 2; // Remove the ` "`. ==> Bar
     // Now, all that's left in line is the value. So we can copy it into the metadata.value
