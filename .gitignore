@@ -14,7 +14,7 @@ cmbr-test-*
 *.o
 .obj
 *.lst
-.build-chache/
+.build-cache/
 .vscode/
 *.cmbr
 test/bigboy-*
