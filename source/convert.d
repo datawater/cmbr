@@ -1,3 +1,5 @@
+// ? TODO: Follow stylistic guidelines
+
 /**
  * Authors: Data gogiberidze <datawater1@gmail.com>
  */
@@ -54,6 +56,12 @@ struct cmbr_move {
  * output_file_name -- The name of an output file
  */
 void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string output_filename) {
+    // TODO: PGN Validation
+    // TODO: Checksum for each game or file || (Maybe XXH3) https://cyan4973.github.io/xxHash/ 
+    // *                                                    https://github.com/Cyan4973/xxHash
+    // *                                                    https://github.com/repeatedly/xxhash-d
+    // TODO: Multi-threading
+
     File output_file;
     try {output_file = File(output_filename, "wb");} catch (Error err) {
         console.error("Couldn't open file: %s. Reason: %s\n", output_filename.ptr, err.msg.ptr);
@@ -78,6 +86,7 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
 
         while (!input_file.eof()) {
             line_number++;
+            // TODO: A proper progress bar, using threads and fseek.
             if (line_number % 1000 == 0 || line_number == 1)
                 console.info("Reading line number: %lu. File: %s\n", line_number, toStringz(input_files[file_i]));
            
@@ -220,7 +229,7 @@ void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte
         ubyte val_length = cast(ubyte)strlen(toStringz(metadata[i].value));
 
         fputc(key_length, output_handle);
-        fwrite(cast(void*)toStringz(metadata[i].key), 1, key_length, output_handle);
+        fwrite(cast(void*)toStringz(metadata[i].key),   1, key_length, output_handle);
         fputc(val_length, output_handle);
         fwrite(cast(void*)toStringz(metadata[i].value), 1, val_length, output_handle);
     }

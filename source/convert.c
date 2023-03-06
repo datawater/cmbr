@@ -5,6 +5,13 @@
 #include <ctype.h>
 #include <stdio.h>
 
+/**
+ * It takes a string, and returns a 16 bit integer that represents the move
+ * 
+ * String - The string to convert to a cmbr.
+ * 
+ * return A 16-bit integer that represents the move.
+ */
 uint16_t string_to_cmbr(char *string) {
     register uint8_t piece = 0;
     register uint8_t turn_into = 0;
