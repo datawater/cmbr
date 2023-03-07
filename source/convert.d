@@ -23,7 +23,7 @@ uint16_t string_to_cmbr(char* string);
  */
 struct metadata_text {
     char[16] key;
-    char[64] value;
+    char[32] value;
 }
 
 /** 
@@ -118,7 +118,7 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
                 game_i = 0; metadata_i = 0;
                 for (int i = 0; i < metadata_i; i++) {
                     utils.memset(cast(char*)&(metadata[i].key),   '\0', 16);
-                    utils.memset(cast(char*)&(metadata[i].value), '\0', 64);
+                    utils.memset(cast(char*)&(metadata[i].value), '\0', 32);
                 }
             }
         }
@@ -140,6 +140,8 @@ void cmbr_to_pgn(string[256] input_files, uint8_t input_files_length, string out
         utils.exit(1);
     }
 
+    FILE* output_handle = output_file.getFP();
+
     for (int file_i = 0; file_i < input_files_length; file_i++) {
         File input_file;
         try {
@@ -159,26 +161,57 @@ void cmbr_to_pgn(string[256] input_files, uint8_t input_files_length, string out
 
         char r;
         while (!input_file.eof()) {
-            r = cast(char)fgetc(input_handle);
-            printf("%d\n", r);
+            char[2] two_bytes = [cast(char)fgetc(input_handle), cast(char)fgetc(input_handle)];
 
-            if (r == '\1') {
-                char metadata_size = cast(char)fgetc(input_handle);
+            if (strncmp(toStringz(two_bytes), toStringz("\1\1"), 2) == 0) {
+                int metadata_size = fgetc(input_handle);
                 for (int metadata_i = 0; metadata_i < metadata_size; metadata_i++) {
-                    printf("metadat_i: %d | metadata_size: 0x%X\n", metadata_i, metadata_size);
-                    string[2] metadata;
+                    char[32][2] metadata;
+                    int[2] kv_size;
 
                     for (int kv = 0; kv < 2; kv++) {
-                        int key_size = fgetc(input_handle);
-                        char[16] buffer;
-
-                        input_file.rawRead(buffer);
-                        metadata[kv] = buffer.idup;
+                        kv_size[kv] = fgetc(input_handle);
+                        for (int i = 0; i < kv_size[kv]; i++)
+                            metadata[kv][i] = cast(char)fgetc(input_handle);
                     }
 
-                    output_file.writef("[%s \"%s\"]\n", metadata[0], metadata[1]);
+                    core.stdc.stdio.fprintf(output_handle, "[%.*s \"%.*s\"]\n", kv_size[0], toStringz(metadata[0]), 
+                                                                                kv_size[1], toStringz(metadata[1]));
                 }
                 output_file.write("\n");
+            }
+
+            if (strncmp(toStringz(two_bytes), toStringz("\4\4"), 2) == 0) {
+                int game_size          = fgetc(input_handle);
+                bool is_first_halfmove = true;
+                int game_moves_count   = 0;
+                
+                if (is_first_halfmove) game_moves_count++;
+                
+                for (int game_i = 0; game_i < game_size; game_i++) {
+                    // TODO: Handle Variations
+                    ushort cmbr_move = cast(ushort)(fgetc(input_handle) << 8 | fgetc(input_handle));
+
+                    if (is_first_halfmove) {fprintf(input_handle, "%d. %s ", game_moves_count, toStringz(cmbr_to_text(cmbr_move)));}
+                    else                   {fprintf(input_handle, "%s ",     toStringz(cmbr_to_text(cmbr_move))); ++game_moves_count;}
+                    
+                    if (game_moves_count % 7 == 0)
+                        fputc('\n', input_handle);
+                    
+                    is_first_halfmove = !is_first_halfmove;
+                }
+
+                // A tring to read and ignore 2 charachters, and then read and store the third one in one line
+                // ((0 & x) & y) | y = (0 & y) | z = 0 | z = z
+                char result_c = cast(char)(((0 & fgetc(input_handle)) & fgetc(input_handle)) | fgetc(input_handle));
+                string result;
+
+                if (result_c == 'd') result = "1/2";
+                if (result_c == 'w') result = "1-0";
+                if (result_c == 'b') result = "0-1";
+                if (result_c == 'u') result = "  *";
+
+                fprintf(input_handle, " %s\n\n", toStringz(result));
             }
         }
 
@@ -281,7 +314,7 @@ ubyte game_to_moves(string* game, ubyte game_i, cmbr_move* moves) {
 void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte moves_len, ubyte metadata_len, char result) {
     FILE* output_handle = output.getFP();
 
-    fputc('\1', output_handle); // Metadata start
+    fputs("\1\1", output_handle); // Metadata start
     fputc(cast(char)metadata_len, output_handle); // Amount of metadata lines
 
     for (ubyte i = 0; i < metadata_len; i++) {
@@ -294,12 +327,68 @@ void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte
         fwrite(cast(void*)toStringz(metadata[i].value), 1, val_length, output_handle);
     }
 
-    fputc('\4', output_handle); // Start of game
+    fputs("\4\4", output_handle); // Start of game
     fwrite(cast(void*)&moves_len, cast(ulong)(ubyte.sizeof), 1, output_handle); // Amount of moves
 
     for (ubyte i = 0; i < moves_len; i++) {
         cmbr_move to_write = moves[i];
         fprintf(output_handle, "%c%c%c", to_write.flags, to_write.move >> 8, to_write.move & ((1 << 8)-1));
     }
-    fprintf(output_handle, "\3%c", result);
+    fprintf(output_handle, "\3\3%c", result);
+}
+
+
+/************************************/
+string cmbr_to_text(ushort cmbr) {
+    ubyte pieceb = cmbr & 0x7; // Get the last 3 bits
+    char piece = ' ';
+
+    switch (pieceb) {
+        case 0b000: {} break;
+        case 0b001: {piece = 'N';}    break;
+        case 0b010: {piece = 'B';}    break;
+        case 0b011: {piece = 'R';}    break;
+        case 0b100: {piece = 'Q';}    break;
+        case 0b101: {piece = 'K';}    break;
+        case 0b110: {return "O-O";}
+        case 0b111: {return "O-O-O";}
+        default: assert(0);
+    }
+
+    char to_square_ver = ((cmbr >> 3) & 0x7) + 1 + 96; // Remove the last 3 bits and get the last 3 bits
+    char to_square_hor = ((cmbr >> 6) & 0x7) + 1 + 48; // Remove the last 6 bits and get the last 3 bits
+
+
+    char from_square = ' ';
+    if (((cmbr >> (9+4)) & 1) == 1) { // Get the use-or-not bit.
+        ushort to_add = (((cmbr >> (9+3)) & 1) == 1) ? 48 : 96; // Determen if it's a column or a file
+        from_square   = cast(char)(((cmbr >> 9) & 0x7) + 1 + to_add);
+    }
+
+    char turn_into = ' ';
+    if (piece == ' ' && (to_square_hor == '8' || to_square_hor == '1')) {
+        switch (cmbr >> 14) {
+            case 0b00: {turn_into = 'N';} break;
+            case 0b01: {turn_into = 'B';} break;
+            case 0b10: {turn_into = 'R';} break;
+            case 0b11: {turn_into = 'Q';} break;
+            default:   {assert(0 && "UNCREACHABLE");}
+        }
+    }
+
+    uint i = 0;
+    char[8] to_return;
+
+    if (piece != ' ') to_return[i++] = piece;
+    if (from_square != ' ') to_return[i++] = from_square;
+
+    to_return[i++] = to_square_ver;
+    to_return[i++] = to_square_hor;
+
+    if (turn_into != ' ') {
+        to_return[i++] = '=';
+        to_return[i++] = turn_into;
+    }
+
+    return to_return[0 .. i].idup;
 }
