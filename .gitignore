@@ -20,3 +20,4 @@ cmbr-test-*
 test/bigboy-*
 *.s
 .DS_Store
+test/test-from*
