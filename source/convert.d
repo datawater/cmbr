@@ -7,7 +7,7 @@
 module convert;
 
 import std.stdio, std.string, std.stdint, std.encoding;
-import core.stdc.string, core.stdc.ctype;
+import core.stdc.string, core.stdc.ctype, core.stdc.stdio;
 import utils, console;
 
 extern (C) {
@@ -64,7 +64,7 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
 
     File output_file;
     try {output_file = File(output_filename, "wb");} catch (Error err) {
-        console.error("Couldn't open file: %s. Reason: %s\n", output_filename.ptr, err.msg.ptr);
+        console.error("Couldn't open file: %s. Reason: %s\n", toStringz(output_filename), toStringz(err.msg));
         utils.exit(1);
     }
 
@@ -72,7 +72,7 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
 
     ulong line_number             = 0;
     metadata_text[16] metadata    = {0, 0};  uint8_t metadata_i = 0;
-    string[32] game;                      uint8_t game_i     = 0;
+    string[32] game;                         uint8_t game_i     = 0;
     cmbr_move[256] moves;
 
     for (int file_i = 0; file_i < input_files_length; file_i++) {
@@ -105,8 +105,16 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
 
             if (last_three == "1/2" || last_three == "1-0" || last_three == "0-1" || last_three == "  *") {
                 ubyte moves_i = game_to_moves(game.ptr, game_i, moves.ptr);
-                write_as_cmbr(moves.ptr, metadata.ptr, output_file, moves_i, metadata_i);
-                
+
+                // FIXME
+                char result;
+                if (last_three == "1/2") result = 'd';
+                if (last_three == "1-0") result = 'w';
+                if (last_three == "0-1") result = 'b';
+                if (last_three == "  *") result = 'u';
+
+                write_as_cmbr(moves.ptr, metadata.ptr, output_file, moves_i, metadata_i, result);
+
                 game_i = 0; metadata_i = 0;
                 for (int i = 0; i < metadata_i; i++) {
                     utils.memset(cast(char*)&(metadata[i].key),   '\0', 16);
@@ -115,14 +123,47 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
             }
         }
 
+        input_file.close();
         console.printc(FGREEN, toStringz("[SUCCESS]"));
         writefln(" Converted file: `%s` to .cmbr format.", input_files[file_i]);
     }
+
+    output_file.close();
 }
 
 void cmbr_to_pgn(string[256] input_files, uint8_t input_files_length, string output_file) {
-    // TODO: Implement function cmbr_to_pgn
-    assert("TODO. IMPLEMENT FUNCTION CMBR_TO_PGN" && 0);
+    File ouput_file;
+    try {
+        ouput_file = File(output_file, "w");
+    } catch(Error err) {
+        console.error("Couldn't open file: %s. Reason: %s\n", toStringz(output_filename), toStringz(err.msg));
+        utils.exit(1);
+    }
+
+    for (int file_i = 0; i < input_files_length; i++) {
+        File input_file;
+        try {
+            input_file = File(input_files, "rb");
+        } catch (Error err) {
+            console.error("Couldn't open file: %s. Reason: %s\n", toStringz(input_files[file_i]), toStringz(err.msg));
+            utils.exit(1);
+        }
+
+        FILE* input_handle = input_file.getFP();
+
+        char[6] magic = {0}; input_files.rawRead(magic);
+        if (strncmp(magic, toStringz("cmb\4")) != 0) {
+            console.error("Invalid CMBR file: %s.". toStringz(input_files[file_i]));
+            utils.exit(1);
+        }
+
+        char r;
+        while ((r = fgetc(input_file)) != EOF) {
+            if (r == '\1') {
+                // rawRead
+            }
+        }
+    }
 }
 
 /**
@@ -143,7 +184,7 @@ void carve_metadata(string line_, metadata_text* metadata) {
 
     // Extract the key
     for (int i = 0; line[0] != ' '; i++) // ==> "Bar
-        metadata.key[i] = line++[0 & length--]; // `0 & length--` is just a trick to decrement the length in one line, since `0 & x` is 0s
+        metadata.key[i] = line++[0 & length--]; // `0 & length--` is just a trick to decrement the length in one line, since `0 & x` is 0
 
     line += 2; length -= 2; // Remove the ` "`. ==> Bar
     // Now, all that's left in line is the value. So we can copy it into the metadata.value
@@ -217,7 +258,7 @@ ubyte game_to_moves(string* game, ubyte game_i, cmbr_move* moves) {
  * metadata_len - The length of the array of metadata
  */
 
-void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte moves_len, ubyte metadata_len) {
+void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte moves_len, ubyte metadata_len, char result) {
     FILE* output_handle = output.getFP();
 
     fputc('\1', output_handle); // Metadata start
@@ -240,4 +281,5 @@ void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte
         cmbr_move to_write = moves[i];
         fprintf(output_handle, "%c%c%c", to_write.flags, to_write.move >> 8, to_write.move & ((1 << 8)-1));
     }
+    fprintf(output_handle, "\3%c", result);
 }
