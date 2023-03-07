@@ -131,19 +131,19 @@ void pgn_to_cmbr(string[256] input_files, uint8_t input_files_length, string out
     output_file.close();
 }
 
-void cmbr_to_pgn(string[256] input_files, uint8_t input_files_length, string output_file) {
-    File ouput_file;
+void cmbr_to_pgn(string[256] input_files, uint8_t input_files_length, string output_filename) {
+    File output_file;
     try {
-        ouput_file = File(output_file, "w");
+        output_file = File(output_filename, "w");
     } catch(Error err) {
         console.error("Couldn't open file: %s. Reason: %s\n", toStringz(output_filename), toStringz(err.msg));
         utils.exit(1);
     }
 
-    for (int file_i = 0; i < input_files_length; i++) {
+    for (int file_i = 0; file_i < input_files_length; file_i++) {
         File input_file;
         try {
-            input_file = File(input_files, "rb");
+            input_file = File(input_files[file_i], "rb");
         } catch (Error err) {
             console.error("Couldn't open file: %s. Reason: %s\n", toStringz(input_files[file_i]), toStringz(err.msg));
             utils.exit(1);
@@ -151,18 +151,38 @@ void cmbr_to_pgn(string[256] input_files, uint8_t input_files_length, string out
 
         FILE* input_handle = input_file.getFP();
 
-        char[6] magic = {0}; input_files.rawRead(magic);
-        if (strncmp(magic, toStringz("cmb\4")) != 0) {
-            console.error("Invalid CMBR file: %s.". toStringz(input_files[file_i]));
+        char[5] magic = new char[5]; input_file.rawRead(magic);
+        if (strncmp(toStringz(magic), toStringz("cmbr\4"), 5) != 0) {
+            console.error("Invalid CMBR file: %s.", toStringz(input_files[file_i]));
             utils.exit(1);
         }
 
         char r;
-        while ((r = fgetc(input_file)) != EOF) {
+        while (!input_file.eof()) {
+            r = cast(char)fgetc(input_handle);
+            printf("%d\n", r);
+
             if (r == '\1') {
-                // rawRead
+                char metadata_size = cast(char)fgetc(input_handle);
+                for (int metadata_i = 0; metadata_i < metadata_size; metadata_i++) {
+                    printf("metadat_i: %d | metadata_size: 0x%X\n", metadata_i, metadata_size);
+                    string[2] metadata;
+
+                    for (int kv = 0; kv < 2; kv++) {
+                        int key_size = fgetc(input_handle);
+                        char[16] buffer;
+
+                        input_file.rawRead(buffer);
+                        metadata[kv] = buffer.idup;
+                    }
+
+                    output_file.writef("[%s \"%s\"]\n", metadata[0], metadata[1]);
+                }
+                output_file.write("\n");
             }
         }
+
+        input_file.close();
     }
 }
 
@@ -262,15 +282,15 @@ void write_as_cmbr(cmbr_move* moves, metadata_text* metadata, File output, ubyte
     FILE* output_handle = output.getFP();
 
     fputc('\1', output_handle); // Metadata start
-    fputc(metadata_len, output_handle); // Amount of metadata lines
+    fputc(cast(char)metadata_len, output_handle); // Amount of metadata lines
 
     for (ubyte i = 0; i < metadata_len; i++) {
         ubyte key_length = cast(ubyte)strlen(toStringz(metadata[i].key));
         ubyte val_length = cast(ubyte)strlen(toStringz(metadata[i].value));
 
-        fputc(key_length, output_handle);
+        fputc(cast(char)key_length, output_handle);
         fwrite(cast(void*)toStringz(metadata[i].key),   1, key_length, output_handle);
-        fputc(val_length, output_handle);
+        fputc(cast(char)val_length, output_handle);
         fwrite(cast(void*)toStringz(metadata[i].value), 1, val_length, output_handle);
     }
 

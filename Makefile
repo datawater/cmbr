@@ -9,7 +9,7 @@ ifeq ($(DC),dmd)
 endif
 ifeq ($(DC),gdc)
 	DFLAGS = '-Wall'
-	DFLAGS_REL = '-O2 -fboundscheck=off -frelease'
+	DFLAGS_REL = '-O2 -fbounds-check=off -frelease'
 endif
 
 main: clean build-libs
